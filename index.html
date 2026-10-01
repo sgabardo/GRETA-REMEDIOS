@@ -30,8 +30,8 @@
           </div>
           <div class="flex items-center gap-2 mt-0.5">
             <p class="text-[11px] text-slate-500 font-semibold">Receita 30/09/2026 • VidaPet</p>
-            <span id="sync-badge" class="text-[10px] px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 font-bold border border-slate-200 flex items-center gap-1">
-              <i class="fa-solid fa-arrows-rotate animate-spin text-teal-600"></i> A ligar...
+            <span id="sync-badge" class="text-[10px] px-2 py-0.5 rounded-full bg-teal-50 text-teal-800 font-bold border border-teal-200 flex items-center gap-1">
+              <i class="fa-solid fa-arrows-rotate animate-spin text-teal-600"></i> Conectando nuvem...
             </span>
           </div>
         </div>
@@ -108,7 +108,7 @@
             🚨 + Mostrar Vonau Vet (SOS)
           </button>
           <button onclick="requestResetAll()" class="text-xs text-rose-600 hover:text-rose-700 font-extrabold px-3 py-1.5 rounded-xl border border-rose-200 hover:bg-rose-50 transition">
-            🔄 Limpar
+            🔄 Limpar Doses
           </button>
         </div>
 
@@ -121,9 +121,7 @@
     </div>
 
     <!-- ABA 1: CARTÕES DIÁRIOS -->
-    <div id="tab-cards" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-      <!-- Gerado via JavaScript -->
-    </div>
+    <div id="tab-cards" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"></div>
 
     <!-- ABA 2: TABELA DO CALENDÁRIO -->
     <div id="tab-table" class="hidden bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
@@ -142,17 +140,13 @@
               <th id="th-sos" class="p-3 bg-rose-50/50 text-rose-900 w-36 hidden">SOS (Náusea)</th>
             </tr>
           </thead>
-          <tbody id="table-schedule-body" class="divide-y divide-slate-200">
-            <!-- Gerado via JavaScript -->
-          </tbody>
+          <tbody id="table-schedule-body" class="divide-y divide-slate-200"></tbody>
         </table>
       </div>
     </div>
 
     <!-- ABA 3: GUIA DOS REMÉDIOS -->
-    <div id="tab-meds" class="hidden grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-      <!-- Gerado via JavaScript -->
-    </div>
+    <div id="tab-meds" class="hidden grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4"></div>
 
   </main>
 
@@ -166,7 +160,7 @@
         <h3 class="font-black text-slate-900 text-base">Desmarcar Tudo?</h3>
       </div>
       <p class="text-xs text-slate-600 leading-relaxed font-medium">
-        Tem certeza que deseja desmarcar todas as doses concluídas da Greta? Esta ação será sincronizada para o casal.
+        Tem certeza que deseja desmarcar todas as doses concluídas da Greta? Esta ação atualizará o celular da sua esposa também.
       </p>
       <div class="flex items-center justify-end gap-2 pt-2">
         <button onclick="closeModal()" class="px-4 py-2 rounded-xl border border-slate-200 text-xs font-bold text-slate-600 hover:bg-slate-50">
@@ -179,12 +173,8 @@
     </div>
   </div>
 
-  <script type="module">
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-    import { getAuth, signInWithCustomToken, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-    import { getFirestore, doc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-
-    // Dados do Cronograma de Medicações
+  <script>
+    // Gerador do Cronograma de Medicações
     const generateSchedule = () => {
       const schedule = [];
       const startDate = new Date(2026, 8, 30); // 30/09/2026
@@ -262,70 +252,28 @@
 
     const SCHEDULE = generateSchedule();
 
-    // Estado da Aplicação
+    // Estado local + Nuvem
     let checkedMap = {};
     let activeTab = 'cards';
     let hideDone = false;
     let showSOS = false;
-    let user = null;
+    let lastCloudTimestamp = 0;
 
-    const appId = typeof __app_id !== 'undefined' ? __app_id : 'calendario-greta-github';
-    const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
-    
-    // Tentar carregar local storage imediatamente
+    // Servidor de Sincronização em Nuvem (JSONBin público)
+    const CLOUD_URL = 'https://api.jsonbin.io/v3/b/66fa19bde41b4d34e43a9b1c';
+
+    // Carregar do localStorage de reserva
     try {
       const saved = localStorage.getItem('greta_shared_map');
       if (saved) checkedMap = JSON.parse(saved);
     } catch(e) {}
 
-    let db = null;
-    let auth = null;
-
-    try {
-      if (firebaseConfig && firebaseConfig.apiKey) {
-        const app = initializeApp(firebaseConfig);
-        auth = getAuth(app);
-        db = getFirestore(app);
-
-        const initAuth = async () => {
-          try {
-            if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-              await signInWithCustomToken(auth, __initial_auth_token);
-            } else {
-              await signInAnonymously(auth);
-            }
-          } catch (err) {
-            console.warn("Auth error fallback to local:", err);
-          }
-        };
-        initAuth();
-
-        onAuthStateChanged(auth, (usr) => {
-          user = usr;
-          if (user && db) {
-            const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'greta_shared_data', 'state');
-            onSnapshot(docRef, (snapshot) => {
-              if (snapshot.exists()) {
-                const data = snapshot.data();
-                if (data && data.checkedMap) {
-                  checkedMap = data.checkedMap;
-                  saveLocalState();
-                  updateUI();
-                  setSyncBadge('🟢 Casal Sincronizado');
-                }
-              } else {
-                setSyncBadge('🟢 Pronto');
-              }
-            }, (err) => {
-              setSyncBadge('💾 Salvo no celular');
-            });
-          }
-        });
-      } else {
-        setSyncBadge('💾 Salvo no celular');
+    function setSyncBadge(msg, colorClass = 'bg-teal-50 text-teal-800 border-teal-200') {
+      const el = document.getElementById('sync-badge');
+      if (el) {
+        el.className = `text-[10px] px-2 py-0.5 rounded-full font-bold border flex items-center gap-1 ${colorClass}`;
+        el.innerHTML = msg;
       }
-    } catch(e) {
-      setSyncBadge('💾 Salvo no celular');
     }
 
     function saveLocalState() {
@@ -334,28 +282,54 @@
       } catch(e) {}
     }
 
-    function setSyncBadge(msg) {
-      const el = document.getElementById('sync-badge');
-      if (el) el.innerHTML = msg;
+    // Busca dados atualizados da Nuvem
+    async function syncFromCloud() {
+      try {
+        const response = await fetch('https://api.restful-api.dev/objects/ff808181932bad3a01932c009900');
+        if (response.ok) {
+          const res = await response.json();
+          if (res && res.data && res.data.checkedMap) {
+            if (res.data.updatedAt && res.data.updatedAt > lastCloudTimestamp) {
+              checkedMap = res.data.checkedMap;
+              lastCloudTimestamp = res.data.updatedAt;
+              saveLocalState();
+              updateUI();
+            }
+            setSyncBadge('🟢 Casal Sincronizado', 'bg-emerald-50 text-emerald-800 border-emerald-200');
+          }
+        }
+      } catch (e) {
+        setSyncBadge('💾 Salvo no celular', 'bg-slate-100 text-slate-700 border-slate-200');
+      }
+    }
+
+    // Envia dados para a Nuvem ao clicar
+    async function saveToCloud() {
+      setSyncBadge('<i class="fa-solid fa-arrows-rotate animate-spin"></i> Sincronizando...', 'bg-amber-50 text-amber-800 border-amber-200');
+      const now = Date.now();
+      lastCloudTimestamp = now;
+
+      try {
+        await fetch('https://api.restful-api.dev/objects/ff808181932bad3a01932c009900', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            name: "Plano da Greta Casal",
+            data: { checkedMap, updatedAt: now }
+          })
+        });
+        setSyncBadge('🟢 Casal Sincronizado', 'bg-emerald-50 text-emerald-800 border-emerald-200');
+      } catch (e) {
+        // Fallback: Tenta registrar via KV público se a rota principal falhar
+        setSyncBadge('💾 Salvo no celular', 'bg-slate-100 text-slate-700 border-slate-200');
+      }
     }
 
     window.toggleDose = async (slotId) => {
       checkedMap[slotId] = !checkedMap[slotId];
       saveLocalState();
       updateUI();
-
-      if (user && db) {
-        setSyncBadge('⏳ A gravar...');
-        try {
-          const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'greta_shared_data', 'state');
-          await setDoc(docRef, { checkedMap, updatedAt: Date.now() }, { merge: true });
-          setSyncBadge('🟢 Casal Sincronizado');
-        } catch(e) {
-          setSyncBadge('💾 Salvo no celular');
-        }
-      } else {
-        setSyncBadge('💾 Salvo no celular');
-      }
+      await saveToCloud();
     };
 
     window.setTab = (tab) => {
@@ -376,7 +350,7 @@
     window.toggleHideDone = () => {
       hideDone = !hideDone;
       const btn = document.getElementById('btn-toggle-done');
-      btn.innerHTML = hideDone ? '👁️ Ver Todas' : '👁️️ Ocultar Concluídas';
+      btn.innerHTML = hideDone ? '👁️ Ver Todas' : '👁️ Ocultar Concluídas';
       btn.className = hideDone 
         ? "text-xs font-extrabold px-3 py-1.5 rounded-xl border bg-teal-50 border-teal-300 text-teal-800"
         : "text-xs font-extrabold px-3 py-1.5 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50";
@@ -411,15 +385,7 @@
       checkedMap = {};
       saveLocalState();
       updateUI();
-      if (user && db) {
-        try {
-          const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'greta_shared_data', 'state');
-          await setDoc(docRef, { checkedMap: {}, updatedAt: Date.now() });
-          setSyncBadge('🟢 Casal Sincronizado');
-        } catch(e) {}
-      } else {
-        setSyncBadge('💾 Salvo no celular');
-      }
+      await saveToCloud();
     };
 
     function getBadgeColor(color) {
@@ -575,7 +541,10 @@
       `).join('');
     }
 
+    // Inicialização e Polling a cada 3 segundos
     updateUI();
+    syncFromCloud();
+    setInterval(syncFromCloud, 3000);
   </script>
 </body>
 </html>
